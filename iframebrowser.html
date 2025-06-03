@@ -1,0 +1,314 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tabbed Iframe Opener</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+
+    body.dark {
+      background-color: #1e1e2f;
+      color: white;
+    }
+
+
+    body.light {
+      background-color: #ffffff;
+      color: #000000;
+    }
+
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background-color: #2b2b40;
+      border-bottom: 1px solid #444;
+    }
+
+
+    body.light header {
+      background-color: #eee;
+      border-bottom: 1px solid #ccc;
+    }
+
+
+    input[type="text"] {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      font-size: 1em;
+    }
+
+
+    button {
+      background-color: #4f46e5;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+
+    button:hover {
+      background-color: #4338ca;
+    }
+
+
+    .tabs {
+      display: flex;
+      background-color: #202030;
+      border-bottom: 1px solid #333;
+      overflow-x: auto;
+    }
+
+
+    body.light .tabs {
+      background-color: #f2f2f2;
+      border-bottom: 1px solid #ccc;
+    }
+
+
+    .tab {
+      padding: 10px 14px;
+      cursor: pointer;
+      background-color: #2e2e40;
+      border-right: 1px solid #444;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s ease;
+    }
+
+
+    .tab:hover {
+      background-color: #3a3a55;
+    }
+
+
+    .tab.active {
+      background-color: #4f46e5;
+      color: white;
+      font-weight: bold;
+    }
+
+
+    .tab span.close {
+      color: #ff6b6b;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+
+    .iframe-container {
+      flex-grow: 1;
+      position: relative;
+    }
+
+
+    iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: none;
+      transition: opacity 0.3s ease;
+    }
+
+
+    iframe.active {
+      display: block;
+      opacity: 1;
+    }
+
+
+    .side-panel {
+      position: absolute;
+      right: 10px;
+      top: 60px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 0.9em;
+    }
+
+
+    body.light .side-panel {
+      background: rgba(255,255,255,0.9);
+      color: black;
+    }
+  </style>
+</head>
+<body class="dark">
+  <header>
+    <input type="text" id="urlInput" placeholder="Enter URL (e.g., https://example.com)" />
+    <button onclick="openTab()">Open</button>
+    <button onclick="toggleTheme()">🌓</button>
+    <button onclick="saveBookmark()">☆</button>
+    <button onclick="showBookmarks()">Bookmarks</button>
+    <button onclick="showHistory()">History</button>
+  </header>
+
+
+  <div class="tabs" id="tabs"></div>
+  <div class="iframe-container" id="iframes"></div>
+
+
+  <div class="side-panel" id="sidePanel" style="display:none;"></div>
+
+
+  <script>
+    let tabCounter = 0;
+    const tabsContainer = document.getElementById("tabs");
+    const iframeContainer = document.getElementById("iframes");
+    const sidePanel = document.getElementById("sidePanel");
+
+
+    const theme = localStorage.getItem("theme") || "dark";
+    document.body.className = theme;
+
+
+    document.getElementById("urlInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") openTab();
+    });
+
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const startHTML = `
+        <html><body style="font-family:sans-serif;background:#1a1a2a;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh"><h1>Welcome</h1><p>Use the bar above to open sites in new tabs.</p></body></html>`;
+      const blob = new Blob([startHTML], { type: "text/html" });
+      const startURL = URL.createObjectURL(blob);
+      openTab(startURL, "Start Page");
+    });
+
+
+    function openTab(url = "", label = "") {
+      if (!url) {
+        url = document.getElementById("urlInput").value.trim();
+        if (!url.startsWith("http")) url = "https://" + url;
+      }
+
+
+      addToHistory(url);
+
+
+      const tabId = `tab-${tabCounter++}`;
+      const tab = document.createElement("div");
+      tab.className = "tab";
+      tab.id = tabId;
+      tab.innerHTML = `${label || url} <span class="close" onclick="event.stopPropagation(); closeTab('${tabId}')">&times;</span>`;
+      tab.onclick = () => activateTab(tabId);
+      tabsContainer.appendChild(tab);
+
+
+      const iframe = document.createElement("iframe");
+      iframe.src = url;
+      iframe.id = `iframe-${tabId}`;
+      iframeContainer.appendChild(iframe);
+
+
+      activateTab(tabId);
+    }
+
+
+    function activateTab(tabId) {
+      document.querySelectorAll(".tab").forEach(tab => {
+        tab.classList.toggle("active", tab.id === tabId);
+      });
+      document.querySelectorAll("iframe").forEach(iframe => {
+        iframe.classList.toggle("active", iframe.id === `iframe-${tabId}`);
+      });
+    }
+
+
+    function closeTab(tabId) {
+      const tab = document.getElementById(tabId);
+      const iframe = document.getElementById(`iframe-${tabId}`);
+      const wasActive = tab.classList.contains("active");
+      tab.remove();
+      iframe.remove();
+      if (wasActive) {
+        const otherTab = tabsContainer.lastElementChild;
+        if (otherTab) activateTab(otherTab.id);
+      }
+    }
+
+
+    function toggleTheme() {
+      const isDark = document.body.classList.contains("dark");
+      document.body.className = isDark ? "light" : "dark";
+      localStorage.setItem("theme", isDark ? "light" : "dark");
+    }
+
+
+    function saveBookmark() {
+      const url = document.getElementById("urlInput").value.trim();
+      const label = prompt("Bookmark name:", url);
+      if (label) {
+        const bookmarks = JSON.parse(localStorage.getItem("bookmarks") || "[]");
+        bookmarks.push({ label, url });
+        localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
+        alert("Bookmark saved.");
+      }
+    }
+
+
+    function showBookmarks() {
+      const bookmarks = JSON.parse(localStorage.getItem("bookmarks") || "[]");
+      sidePanel.innerHTML = "<strong>Bookmarks:</strong><br>" +
+        bookmarks.map(b => `<div style="cursor:pointer" onclick="openTab('${b.url}', '${b.label}');hideSidePanel()">${b.label}</div>`).join("");
+      sidePanel.style.display = "block";
+    }
+
+
+    function addToHistory(url) {
+      const history = JSON.parse(localStorage.getItem("history") || "[]");
+      history.push({ url, time: new Date().toLocaleString() });
+      localStorage.setItem("history", JSON.stringify(history));
+    }
+
+
+    function showHistory() {
+      const history = JSON.parse(localStorage.getItem("history") || "[]");
+      sidePanel.innerHTML = "<strong>History:</strong><br>" +
+        history.map(h => `<div style="cursor:pointer" onclick="openTab('${h.url}');hideSidePanel()">${h.url} <small>(${h.time})</small></div>`).join("");
+      sidePanel.style.display = "block";
+    }
+
+
+    function hideSidePanel() {
+      sidePanel.style.display = "none";
+    }
+
+
+    document.body.addEventListener("click", e => {
+      if (!sidePanel.contains(e.target) && e.target.tagName !== "BUTTON") {
+        hideSidePanel();
+      }
+    });
+  </script>
+</body>
+</html>
